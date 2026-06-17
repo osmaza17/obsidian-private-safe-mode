@@ -1,0 +1,9 @@
+{
+  "id": "private-safe-mode",
+  "name": "Private Safe Mode",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Oculta por completo las notas marcadas como privadas (frontmatter 'private: true') hasta activar el modo seguro con atajo + contrasena. Ocultacion, no cifrado.",
+  "author": "osmaza17",
+  "isDesktopOnly": false
+}

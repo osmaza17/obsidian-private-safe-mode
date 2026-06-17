@@ -1,0 +1,14 @@
+/* Private Safe Mode
+ * El ocultado del explorador se inyecta dinamicamente desde main.ts
+ * (un <style> con las rutas de las notas privadas). Aqui solo va lo estatico.
+ */
+
+.psm-status {
+  cursor: pointer;
+}
+
+/* Entradas de notas privadas ocultadas en los paneles de backlinks/enlaces/menciones
+ * (se aplica/quita dinamicamente desde main.ts mientras el modo seguro esta bloqueado). */
+.psm-link-hidden {
+  display: none !important;
+}
