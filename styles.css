@@ -12,3 +12,13 @@
 .psm-link-hidden {
   display: none !important;
 }
+
+/* Barra de censura en el EDITOR (Live Preview / Source mode), pintada por el widget de la
+ * extension de CodeMirror. El widget solo existe mientras esta bloqueado, asi que basta con
+ * estilarlo aqui. Mismo aspecto (grande y solido) que la censura de la vista lectura. */
+.psm-censored-cm {
+  color: var(--text-normal);
+  font-size: calc(var(--font-text-size, 1rem) * 1.6);
+  letter-spacing: 0.04em;
+  vertical-align: -0.12em;
+}

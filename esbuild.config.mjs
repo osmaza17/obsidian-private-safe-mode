@@ -10,6 +10,11 @@ const ctx = await esbuild.context({
   external: [
     "obsidian",
     "electron",
+    // Modulos de CodeMirror 6 que Obsidian provee en runtime. DEBEN ser externos: si se
+    // empaquetan, la extension de editor usaria una instancia distinta de CM6 a la del editor de
+    // Obsidian y las decoraciones no aplicarian.
+    "@codemirror/view",
+    "@codemirror/state",
     ...builtins,
   ],
   format: "cjs",
