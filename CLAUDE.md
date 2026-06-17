@@ -129,6 +129,13 @@ Punto central: `applyHiding()` en `main.ts`. Encadena:
 6. `refreshOmnisearch()` — intenta reindexar Omnisearch si su API está disponible.
 7. `refreshEditorCensor()` — despacha `psmCensorRefresh` a los editores para recalcular la censura.
 
+`refreshGraphViews()` (llamado desde `applyIgnoreFilters`, **solo cuando `userIgnoreFilters` cambia
+de verdad**, no en cada `layout-change`, y en `onLayoutReady` al arrancar) fuerza a las vistas de
+grafo a recomputar (`view.dataEngine/engine.render()`). El grafo respeta "Archivos excluidos" pero no
+se entera solo del cambio (solo recomputa ante ciertos eventos: de ahí que al pulsar un nodo privado
+el grafo "se resetee" y el nodo desaparezca). Best-effort/API interna; solo re-renderiza (no persiste,
+no toca notas); degrada a no-op si la API cambia.
+
 `guardOpen()` (evento `file-open`) impide abrir notas privadas mientras está bloqueado.
 `guardHover` (listener `mouseover` en captura sobre `document`) bloquea la vista previa al pasar el
 ratón sobre enlaces/embeds a notas privadas (best-effort; en Live Preview el destino no siempre es

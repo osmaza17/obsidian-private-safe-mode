@@ -146,6 +146,11 @@ datos. Esto es importante:
     nota privada abierta.
   - Intercepta el `mouseover` (en captura) para bloquear la vista previa al pasar el raton sobre
     enlaces/embeds a notas privadas (best-effort; en Live Preview el destino no siempre es legible).
+  - **Fuerza al grafo a recomputar** (`refreshGraphViews`) justo cuando cambia `userIgnoreFilters`.
+    El grafo SI respeta "Archivos excluidos", pero no se entera solo del cambio: solo recomputa sus
+    nodos ante ciertos eventos (por eso, sin esto, los nodos privados seguian apareciendo hasta que
+    interactuabas con el grafo). Usa la API interna del motor del grafo (`dataEngine.render()`),
+    best-effort; si no esta disponible, degrada a no-op (el grafo recomputaria al interactuar).
 - Al desbloquear: revierte todo (quita solo lo que el plugin habia anadido, sin tocar las
   exclusiones propias del usuario; desconecta el observer y limpia las clases de ocultado).
 - Arranca **siempre bloqueado**: el desbloqueo no persiste entre reinicios.

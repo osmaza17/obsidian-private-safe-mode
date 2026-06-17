@@ -166,6 +166,10 @@ export default class PrivateSafeModePlugin extends Plugin {
     this.unlocked = false;
     this.applyHiding();
 
+    // Al arrancar, el grafo puede restaurarse a la vez que aplicamos el estado inicial; forzamos un
+    // recomputo cuando la interfaz esta lista para que los nodos privados no aparezcan de salida.
+    this.app.workspace.onLayoutReady(() => this.refreshGraphViews());
+
     console.log("[private-safe-mode] cargado; notas privadas:", this.privatePaths.size);
   }
 
@@ -299,14 +303,41 @@ export default class PrivateSafeModePlugin extends Plugin {
     // Evitar escrituras innecesarias en la config de Obsidian.
     if (this.sameList(current, next)) return;
     vault.setConfig(IGNORE_FILTERS_KEY, next);
-    // Obsidian refresca busqueda/grafo/switcher al cambiar userIgnoreFilters.
-    // El explorador lo refrescamos nosotros con el CSS (applyExplorerHiding).
+    // Obsidian refresca busqueda/switcher al cambiar userIgnoreFilters, pero el GRAFO no se entera
+    // solo: respeta "Archivos excluidos" pero solo recomputa sus nodos ante ciertos eventos (por eso
+    // al pulsar un nodo privado el grafo "se resetea" y el nodo desaparece). Lo forzamos a recomputar
+    // aqui, justo cuando la lista de excluidos cambia (bloquear/desbloquear/cambio del set privado).
+    // Como solo entramos aqui cuando la lista REALMENTE cambia, no se dispara en cada layout-change.
+    this.refreshGraphViews();
   }
 
   private sameList(a: string[], b: string[]): boolean {
     if (a.length !== b.length) return false;
     const sb = new Set(b);
     return a.every((x) => sb.has(x));
+  }
+
+  /**
+   * Fuerza a las vistas de grafo (global y local) a recomputar sus nodos, para que apliquen la lista
+   * "Archivos excluidos" (userIgnoreFilters) que acabamos de cambiar y los nodos privados aparezcan/
+   * desaparezcan al instante, sin tener que interactuar con el grafo.
+   *
+   * Best-effort: usa la API interna no documentada del motor del grafo (`dataEngine`/`engine`). Solo
+   * RE-RENDERIZA (no persiste ni modifica notas); si la API cambia entre versiones, degrada a no-op
+   * (el grafo seguiria recomputando al interactuar, como antes).
+   */
+  private refreshGraphViews() {
+    for (const type of ["graph", "localgraph"]) {
+      for (const leaf of this.app.workspace.getLeavesOfType(type)) {
+        const view: any = leaf.view;
+        const engine = view?.dataEngine ?? view?.engine;
+        try {
+          if (engine && typeof engine.render === "function") engine.render();
+        } catch (e) {
+          console.warn("[private-safe-mode] no se pudo refrescar el grafo:", e);
+        }
+      }
+    }
   }
 
   /**
