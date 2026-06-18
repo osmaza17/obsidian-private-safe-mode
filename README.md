@@ -54,9 +54,9 @@ Verificable con `grep` de esas APIs antes de cada release (ver `CLAUDE.md` > Con
    pueden abrir. Tampoco
    aparecen en los paneles de **vinculos a esta nota (backlinks)**, **enlaces salientes** ni
    **menciones sin enlazar**; tanto los enlaces `[[...]]` como los **embeds `![[...]]`** que apuntan a
-   ellas aparecen **censurados** en el texto de otras notas (cuadrados `■■■` en lugar del enlace o del
-   contenido embebido; en el enlace tantos como caracteres tenga su texto, en el embed tantos como el
-   nombre de la nota embebida); no se muestra su **vista previa al pasar el raton**; y si una
+   ellas aparecen **censurados** en el texto de otras notas (una barra continua de bloques `███` en
+   lugar del enlace o del contenido embebido; longitud proporcional al texto del enlace o al nombre de
+   la nota embebida); no se muestra su **vista previa al pasar el raton**; y si una
    nota privada estaba **abierta en una pestana**, se cierra al bloquear (ver el apartado siguiente
    sobre el alcance de esto).
 5. Pulsa el atajo (o el candado de la barra de estado) e introduce la contrasena para mostrarlas.
@@ -93,12 +93,13 @@ datos. Esto es importante:
   renderizadas y oculta las que corresponden a una nota privada (las casa por **nombre de archivo**).
   Consecuencia: si tienes dos notas con el **mismo nombre** y una es privada, la otra tambien quedara
   oculta en esos paneles mientras este bloqueado (se prefiere ocultar de mas a filtrar una privada).
-- Los enlaces `[[...]]` a notas privadas se **censuran** en el texto: se reemplazan por cuadrados `■`,
-  uno por cada caracter no-espacio del texto (longitud proporcional), y quedan inertes. Funciona
+- Los enlaces `[[...]]` a notas privadas se **censuran** en el texto: se reemplazan por una barra
+  continua de bloques `█` (uno por cada caracter, espacios incluidos, sin huecos; longitud
+  proporcional), y quedan inertes. Funciona
   aunque el enlace use un alias (`[[nota|otro texto]]`), porque se casa por el destino, no por el texto
   visible (en ese caso la longitud corresponde al alias). Hay **dos mecanismos** segun la vista:
   - **Vista lectura / preview**: como CSS no puede contar caracteres, un post-procesador de Markdown
-    marca el enlace y guarda la cadena de cuadrados en `--psm-censor`; el CSS solo la pinta mientras
+    marca el enlace y guarda la cadena de bloques en `--psm-censor`; el CSS solo la pinta mientras
     esta bloqueado.
   - **Editor (Live Preview y Source mode)**: ahi los enlaces no son `<a>` del DOM, asi que se usa una
     extension de CodeMirror que recorre el texto visible, detecta los `[[...]]`/`![[...]]` a notas
@@ -132,8 +133,8 @@ datos. Esto es importante:
   - Inyecta un `<style>` que oculta las notas del explorador y **censura** los enlaces internos
     (`a.internal-link`) y los embeds (`.internal-embed`) a notas privadas EN VISTA LECTURA: en el
     enlace colapsa el texto original (`font-size: 0` + `color: transparent`), en el embed oculta el
-    contenido embebido (`> *`), y en ambos pinta con un `::after` la cadena de cuadrados de la
-    variable `--psm-censor` (que rellena el post-procesador de Markdown via `markCensorable`, un `■`
+    contenido embebido (`> *`), y en ambos pinta con un `::after` la cadena de bloques de la
+    variable `--psm-censor` (que rellena el post-procesador de Markdown via `markCensorable`, un `█`
     por caracter), dejando el elemento inerte (`pointer-events: none`).
   - Registra una **extension de CodeMirror** (`registerEditorExtension`) que censura los
     `[[...]]`/`![[...]]` a notas privadas EN EL EDITOR (Live Preview y Source mode), reemplazandolos
@@ -176,9 +177,11 @@ instancia de CodeMirror y no aplicarian).
 
 ### Ajustes "knob" (para tunear)
 
-- **Tamano de los cuadrados de censura**: factor `* 1.6` en `applyExplorerHiding` (CSS de lectura,
+- **Tamano de la barra de censura**: factor `* 1.6` en `applyExplorerHiding` (CSS de lectura,
   `main.ts`) y en `.psm-censored-cm` (`styles.css`, editor). Cambia **ambos a la vez** para que
   lectura y editor coincidan.
-- **Glifo de censura**: constante `CENSOR_CHAR` (`■`) al principio de `main.ts`.
+- **Glifo de censura**: constante `CENSOR_CHAR` (`█`, FULL BLOCK; barra continua con
+  `letter-spacing: 0`) al principio de `main.ts`. `censorString` pone un bloque por cada caracter
+  (espacios incluidos) para que no haya huecos entre palabras.
 - **Campo de frontmatter**: ajuste "Campo de frontmatter para notas privadas" (por defecto
   `private`), comparado sin distinguir mayusculas.

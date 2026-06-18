@@ -19,6 +19,6 @@
 .psm-censored-cm {
   color: var(--text-normal);
   font-size: calc(var(--font-text-size, 1rem) * 1.6);
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   vertical-align: -0.12em;
 }

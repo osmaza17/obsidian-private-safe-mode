@@ -61,9 +61,10 @@ const DEFAULT_SETTINGS: PSMSettings = {
 
 const STYLE_EL_ID = "private-safe-mode-hide-style";
 const IGNORE_FILTERS_KEY = "userIgnoreFilters";
-// Caracter de censura. Se repite uno por cada caracter (no espacio) del texto del enlace,
-// para que la longitud de la censura sea proporcional al texto que oculta.
-const CENSOR_CHAR = "■";
+// Caracter de censura. Se repite uno por CADA caracter del texto (incluidos los espacios), para
+// que salga una barra continua sin huecos y proporcional al texto. `█` (FULL BLOCK) + letter-spacing:0
+// hace que los bloques se peguen formando una linea solida.
+const CENSOR_CHAR = "█";
 
 // Efecto de CodeMirror para forzar el recalculo de la censura del editor al bloquear/desbloquear
 // (un cambio de estado externo que el editor no detecta por si solo).
@@ -374,7 +375,7 @@ export default class PrivateSafeModePlugin extends Plugin {
       `  font-size: calc(var(--font-text-size, 1rem) * 1.6);\n` +
       `  line-height: 0;\n` +
       `  vertical-align: -0.12em;\n` +
-      `  letter-spacing: 0.04em;\n`;
+      `  letter-spacing: 0;\n`;
 
     // 2) Enlaces: font-size:0 colapsa el texto original (que podria revelar el nombre/alias).
     blocks.push(
@@ -463,15 +464,14 @@ export default class PrivateSafeModePlugin extends Plugin {
   }
 
   /**
-   * Construye la cadena de censura para un texto: un `■` por cada caracter no-espacio,
-   * conservando los espacios para no fundir las palabras. La longitud queda proporcional
-   * al texto original. Nunca devuelve vacio (minimo un cuadrado).
+   * Construye la cadena de censura para un texto: un `█` por CADA caracter, INCLUIDOS los espacios,
+   * para que salga una barra continua sin huecos entre palabras. La longitud queda proporcional al
+   * texto. `Array.from` cuenta code points (maneja bien emojis/pares surrogate). Nunca devuelve
+   * vacio (minimo un bloque).
    */
   censorString(text: string): string {
-    const out = Array.from(text)
-      .map((ch) => (/\s/.test(ch) ? " " : CENSOR_CHAR))
-      .join("");
-    return out.trim().length ? out : CENSOR_CHAR;
+    const out = CENSOR_CHAR.repeat(Array.from(text).length);
+    return out.length ? out : CENSOR_CHAR;
   }
 
   /**

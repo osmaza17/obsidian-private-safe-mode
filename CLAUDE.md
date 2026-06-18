@@ -68,8 +68,9 @@ Un plugin mínimo de Obsidian: `manifest.json` (id/version/minAppVersion), `main
 `@codemirror/*` como `external`). La lógica entera vive en `main.ts` (ver "Estructura" y "Mecanismo").
 Los "knobs" ajustables están como constantes al principio de `main.ts`:
 
-- `CENSOR_CHAR` (`■`) — glifo de censura.
-- Factor de tamaño del cuadrado: `* 1.6` en `applyExplorerHiding` (CSS de lectura) y en
+- `CENSOR_CHAR` (`█`, FULL BLOCK) — glifo de censura. Barra continua: `letter-spacing: 0` y
+  `censorString` pone un bloque por cada caracter (espacios incluidos), sin huecos entre palabras.
+- Factor de tamaño de la barra: `* 1.6` en `applyExplorerHiding` (CSS de lectura) y en
   `styles.css` (`.psm-censored-cm`, editor). **Cambiar ambos a la vez** para que lectura y editor
   coincidan.
 - `settings.privateField` (por defecto `private`) — campo de frontmatter, configurable en ajustes.
@@ -96,11 +97,11 @@ Punto central: `applyHiding()` en `main.ts`. Encadena:
    (`.internal-embed`) a notas privadas: en el enlace colapsa el texto original (`font-size: 0` +
    `color: transparent`), en el embed oculta el contenido embebido (`> *`), y en ambos pinta con un
    `::after` la cadena de la variable CSS `--psm-censor` (con `pointer-events: none` para dejarlos
-   inertes). Como CSS no puede contar caracteres, qué censurar y con cuántos cuadrados lo decide
+   inertes). Como CSS no puede contar caracteres, qué censurar y con cuántos bloques lo decide
    `markCensorable()` en JS: marca el elemento (`psm-censored-link` / `psm-censored-embed`) y rellena
-   `--psm-censor` con un `CENSOR_CHAR` (`■`) por carácter no-espacio (longitud proporcional al **texto
-   visible** del enlace, o al **nombre** de la nota embebida en el embed; no a su contenido). El
-   tamaño del cuadrado se escala vía CSS (`calc(var(--font-text-size) * 1.6)`). `markCensorable` se
+   `--psm-censor` con un `CENSOR_CHAR` (`█`) por carácter (espacios incluidos → barra continua;
+   longitud proporcional al **texto visible** del enlace, o al **nombre** de la nota embebida; no a su
+   contenido). El tamaño se escala vía CSS (`calc(var(--font-text-size) * 1.6)`). `markCensorable` se
    invoca desde un `registerMarkdownPostProcessor` (onload, para lo que se renderiza después) y desde
    `applyExplorerHiding`, que lo aplica **solo sobre los contenedores de lectura
    `.markdown-preview-view`** (NUNCA sobre `workspace.containerEl` entero, que incluiría el editor CM).
