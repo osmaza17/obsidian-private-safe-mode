@@ -22,3 +22,21 @@
   letter-spacing: 0;
   vertical-align: -0.12em;
 }
+
+/* Indicador visual del modo privado en las ventanas flotantes de busqueda (Quick Switcher Ctrl+O,
+ * Paleta de comandos Ctrl+P y Vault search de Omnisearch; todas llevan la clase `.prompt`).
+ *
+ * main.ts pone en el <body> la clase `psm-locked` cuando el modo privado esta ACTIVO (notas
+ * privadas ocultas). SOLO en ese caso se aplica un tinte amarillo ligero. Cuando esta DESACTIVADO
+ * (`psm-unlocked`) NO hay ninguna regla: la ventana conserva su apariencia por defecto.
+ *
+ * Sin bordes, sin halos y sin banda de aviso: solo el tinte.
+ *
+ * Se usa `background-image` (una capa amarilla plana) en vez de `background-color` a proposito: asi
+ * el tinte se SUMA encima del fondo que ya tenga la ventana sin reemplazarlo. Esto evita reintroducir
+ * transparencia y no pelea con el snippet de opacidad de las ventanas flotantes (que fija el
+ * background-color); ambos coexisten (fondo opaco + tinte amarillo). */
+body.psm-locked .prompt,
+body.psm-locked .omnisearch-modal {
+  background-image: linear-gradient(rgba(224, 168, 0, 0.12), rgba(224, 168, 0, 0.12)) !important;
+}

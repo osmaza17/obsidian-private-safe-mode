@@ -10,6 +10,8 @@ con `Private: true` en su frontmatter (el nombre del campo es configurable en aj
 —`settings.privateField`, por defecto `private`— y se detecta sin distinguir mayúsculas/minúsculas;
 ver `isPrivate`) mientras el "modo seguro" está **bloqueado** (estado por
 defecto al arrancar). Al desbloquear con un atajo + contraseña, las notas privadas reaparecen.
+También pueden marcarse archivos como privados **manualmente** desde ajustes, por nombre o ruta
+(`settings.privateFiles`), sin necesidad del frontmatter.
 
 Es **ocultación, NO cifrado**: los `.md` siguen siendo texto plano en disco. Ver `README.md` para el
 detalle del alcance y las limitaciones (especialmente del ocultado de backlinks/enlaces/menciones,
@@ -74,6 +76,34 @@ Los "knobs" ajustables están como constantes al principio de `main.ts`:
   `styles.css` (`.psm-censored-cm`, editor). **Cambiar ambos a la vez** para que lectura y editor
   coincidan.
 - `settings.privateField` (por defecto `private`) — campo de frontmatter, configurable en ajustes.
+- `settings.hotkey` (`{modifiers, key}`, por defecto `Ctrl+Alt+Z`) — atajo para alternar el modo seguro,
+  **configurable desde los ajustes del plugin** (botón "Cambiar" que captura la siguiente combinación;
+  Escape cancela; botón de reset a Ctrl+S). NO usa el sistema de hotkeys de comandos de Obsidian, pero
+  SÍ el **scope raíz** (`app.scope.register(modifiers, key, fn)`) en `registerHotkey()` —el mecanismo
+  oficial de atajos, que funciona aunque el foco esté en el editor; un `keydown` crudo en el DOM NO es
+  fiable porque CodeMirror puede tragarse Ctrl+S antes—. `registerHotkey()` desregistra el handle
+  anterior y registra el nuevo, y se rellama al guardar/resetear el atajo en ajustes; el callback hace
+  `preventDefault()` + `toggleSafeMode()` + `return false`. El handle se desregistra en `onunload`. El
+  comando `toggle` sigue existiendo para la paleta (sin hotkey por defecto).
+- `settings.privateFiles` (lista) — archivos marcados como privados **a mano** desde ajustes, por
+  nombre (basename, con o sin `.md`) o por ruta. Se suma al criterio del frontmatter en
+  `rebuildPrivateSet` (`matchesManual` / `manualPrivateKeys`); match sin distinguir
+  mayúsculas/minúsculas y sin la extensión `.md`.
+- `psm-unlocked` / `psm-locked` — clase que `updateBodyState()` pone en el `<body>` según el estado.
+  La usa `styles.css` para teñir el modal de Omnisearch (`.omnisearch-modal`) sin tocar el plugin de
+  Omnisearch: si Omnisearch renombra sus clases, el tinte solo deja de aplicarse (no rompe nada).
+  Solo se usa `psm-locked` (modo privado ACTIVO): aplica un tinte amarillo ligero a las ventanas
+  flotantes. Cuando esta DESACTIVADO (`psm-unlocked`) NO hay ninguna regla → apariencia por defecto
+  (sin bordes, sin banda de aviso). Vive **solo en `styles.css`** (CSS, sin build); Obsidian
+  **cachea `styles.css`**, así que tras editarlo hay que recargar el plugin (desactivar/activar) o
+  Obsidian para verlo.
+  **OJO con el selector**: el atajo Ctrl+O del usuario abre el **Quick Switcher nativo** (placeholder
+  "Find or create a note...", botón "shift to create"), NO el "Vault search" de Omnisearch. Por eso
+  apuntar solo a `.omnisearch-modal` no teñía nada. El switcher nativo, la paleta de comandos y el
+  Vault search de Omnisearch comparten la clase `.prompt`, así que el CSS apunta a `.prompt`. El tinte
+  se hace con `background-image` (capa amarilla plana), NO con `background-color`, para sumarse al
+  fondo existente sin pisarlo ni reintroducir transparencia (coexiste con el snippet de opacidad
+  `prompt-opacity.css` que fija el `background-color`).
 
 ## Mecanismo de ocultado (dónde tocar)
 

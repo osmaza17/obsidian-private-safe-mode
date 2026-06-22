@@ -45,6 +45,10 @@ Verificable con `grep` de esas APIs antes de cada release (ver `CLAUDE.md` > Con
    Private: true
    ---
    ```
+   También puedes marcar archivos como privados **sin tocar su frontmatter**: en los ajustes, en
+   **"Archivos privados por nombre"**, añade el nombre del archivo (con o sin `.md`) o su ruta dentro
+   del vault. Cada entrada se compara sin distinguir mayúsculas/minúsculas y se suma al criterio del
+   frontmatter. Útil para ocultar notas a las que no quieres (o no puedes) añadirles la propiedad.
 2. En los ajustes del plugin, define una contrasena.
 3. (Recomendado) Asigna un atajo de teclado al comando **"Alternar modo seguro"** en
    Ajustes > Hotkeys. Nota: el atajo es visible en esos ajustes, asi que no es secreto por si solo;
@@ -83,6 +87,15 @@ Para que Omnisearch deje de devolver las notas privadas, activa en sus ajustes
 una nota ya indexada puede seguir apareciendo hasta que se reindexe (puede requerir reiniciar
 Obsidian o limpiar la cache de Omnisearch). El plugin intenta forzar un reindexado via la API de
 Omnisearch si esta disponible, pero ese metodo no esta garantizado entre versiones.
+
+**Indicador visual del estado**: cuando el modo privado esta **activo** (notas privadas ocultas), las
+ventanas flotantes de busqueda se tiñen de un **amarillo ligero**, para recordarte de un vistazo que
+la busqueda esta filtrada y no salen todos los resultados. Cuando el modo privado esta **desactivado**
+no se aplica ningun cambio: las ventanas quedan con su apariencia por defecto (sin bordes ni avisos).
+Funciona con el **Quick Switcher nativo** (Ctrl+O), la **paleta de comandos** (Ctrl+P) y el **Vault
+search de Omnisearch**, porque el CSS apunta a la clase `.prompt` de Obsidian (comun a los tres). Se
+hace 100% desde este plugin (una clase `psm-locked` en el `<body>` + CSS), **sin modificar Omnisearch
+ni Obsidian**; si Obsidian renombrara `.prompt`, el tinte simplemente dejaria de mostrarse.
 
 ## Backlinks, enlaces salientes y menciones: alcance del ocultado
 
@@ -185,3 +198,9 @@ instancia de CodeMirror y no aplicarian).
   (espacios incluidos) para que no haya huecos entre palabras.
 - **Campo de frontmatter**: ajuste "Campo de frontmatter para notas privadas" (por defecto
   `private`), comparado sin distinguir mayusculas.
+- **Archivos privados por nombre**: ajuste "Archivos privados por nombre" (`settings.privateFiles`).
+  Lista de nombres/rutas que se ocultan ademas de las del frontmatter; match sin distinguir
+  mayusculas y sin la extension `.md`.
+- **Tinte del modal de Omnisearch**: reglas `body.psm-unlocked`/`body.psm-locked` en `styles.css`
+  (colores via variables del tema `--color-red`/`--color-green`). La clase del `<body>` la pone
+  `updateBodyState()` en `main.ts`.

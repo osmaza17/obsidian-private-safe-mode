@@ -1,8 +1,10 @@
 import {
   App,
   editorLivePreviewField,
+  KeymapEventHandler,
   MarkdownView,
   Modal,
+  Modifier,
   Notice,
   Plugin,
   PluginSettingTab,
@@ -36,6 +38,10 @@ interface PSMSettings {
   // Nombre del campo de frontmatter que marca una nota como privada (NSFW). Se compara sin
   // distinguir mayusculas; la nota es privada si ese campo vale true. Por defecto "private".
   privateField: string;
+  // Lista de archivos marcados manualmente como privados desde los ajustes (ademas del
+  // frontmatter). Cada entrada es un nombre de archivo (basename, con o sin .md) o una ruta dentro
+  // del vault. Se compara SIN distinguir mayusculas/minusculas y sin la extension .md.
+  privateFiles: string[];
   // Hash + salt de la contrasena (nunca se guarda en claro). null = sin contrasena.
   passwordHash: string | null;
   passwordSalt: string | null;
@@ -47,17 +53,37 @@ interface PSMSettings {
   // Rutas que el plugin anadio a userIgnoreFilters en la ultima aplicacion.
   // Se persiste para poder revertirlas aunque Obsidian se cierre/crashee bloqueado.
   managedFilters: string[];
+  // Atajo de teclado para alternar el modo seguro, configurable desde los ajustes
+  // (capturando la combinacion). modifiers ⊂ {Ctrl, Alt, Shift, Meta}; key en
+  // minuscula. key="" => sin atajo.
+  hotkey: HotkeyConfig;
+}
+
+interface HotkeyConfig {
+  modifiers: string[];
+  key: string;
 }
 
 const DEFAULT_SETTINGS: PSMSettings = {
   privateField: "private",
+  privateFiles: [],
   passwordHash: null,
   passwordSalt: null,
   autoRelock: false,
   autoRelockMinutes: 15,
   showStatus: true,
   managedFilters: [],
+  hotkey: { modifiers: ["Ctrl", "Alt"], key: "z" },
 };
+
+/** Formatea un atajo para mostrarlo (p. ej. "Ctrl + S"). */
+function formatHotkey(hk: HotkeyConfig | undefined): string {
+  if (!hk || !hk.key) return "(sin atajo)";
+  const parts = [...(hk.modifiers || [])];
+  parts.push(hk.key.length === 1 ? hk.key.toUpperCase() : hk.key);
+  return parts.join(" + ");
+}
+
 
 const STYLE_EL_ID = "private-safe-mode-hide-style";
 const IGNORE_FILTERS_KEY = "userIgnoreFilters";
@@ -93,6 +119,8 @@ export default class PrivateSafeModePlugin extends Plugin {
   private linkScanHandle: number | null = null;
   /** Handle del debounce del marcado de embeds del editor (Live Preview). */
   private embedScanHandle: number | null = null;
+  /** Handle del atajo registrado en el scope raiz (para poder re-registrarlo). */
+  private hotkeyHandle: KeymapEventHandler | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -146,12 +174,16 @@ export default class PrivateSafeModePlugin extends Plugin {
     // que apunten a notas privadas. En captura para adelantarnos al core "page preview".
     this.registerDomEvent(document, "mouseover", this.guardHover, { capture: true });
 
-    // Comando para alternar el modo seguro (el usuario le asigna un atajo).
+    // Comando para alternar el modo seguro (sigue disponible en la paleta).
     this.addCommand({
       id: "toggle",
       name: "Alternar modo seguro (mostrar/ocultar notas privadas)",
       callback: () => this.toggleSafeMode(),
     });
+
+    // Atajo de teclado configurable desde los ajustes del plugin (por defecto
+    // Ctrl+S), via el scope raiz de Obsidian.
+    this.registerHotkey();
 
     this.addCommand({
       id: "lock-now",
@@ -174,14 +206,41 @@ export default class PrivateSafeModePlugin extends Plugin {
     console.log("[private-safe-mode] cargado; notas privadas:", this.privatePaths.size);
   }
 
+  /** (Re)registra el atajo configurable en el scope raiz de Obsidian. Es el
+   *  mecanismo oficial de atajos: funciona aunque el foco este en el editor
+   *  (un listener `keydown` crudo en el DOM no es fiable porque CodeMirror puede
+   *  tragarse Ctrl+S antes). Se vuelve a llamar al cambiar el atajo en ajustes. */
+  registerHotkey() {
+    if (this.hotkeyHandle) {
+      this.app.scope.unregister(this.hotkeyHandle);
+      this.hotkeyHandle = null;
+    }
+    const hk = this.settings.hotkey;
+    if (!hk || !hk.key) return;
+    this.hotkeyHandle = this.app.scope.register(
+      (hk.modifiers || []) as Modifier[],
+      hk.key,
+      (evt) => {
+        evt.preventDefault();
+        this.toggleSafeMode();
+        return false; // consume el evento (evita el comportamiento por defecto)
+      }
+    );
+  }
+
   onunload() {
     // Al descargar, restaurar la lista de excluidos (quitar lo nuestro) y el CSS.
+    if (this.hotkeyHandle) {
+      this.app.scope.unregister(this.hotkeyHandle);
+      this.hotkeyHandle = null;
+    }
     this.unlocked = true;
     this.applyIgnoreFilters();
     this.removeStyle();
     this.clearRelockTimer();
     this.disconnectLinkObserver();
     this.unhideLinkPanes();
+    document.body.classList.remove("psm-unlocked", "psm-locked");
   }
 
   // --------------------------------------------------------------------------
@@ -207,13 +266,39 @@ export default class PrivateSafeModePlugin extends Plugin {
     return false;
   }
 
+  /**
+   * Claves normalizadas (minusculas, sin extension .md) de los archivos marcados manualmente como
+   * privados desde los ajustes (`settings.privateFiles`). Acepta tanto basenames como rutas.
+   */
+  private manualPrivateKeys(): Set<string> {
+    const keys = new Set<string>();
+    for (const raw of this.settings.privateFiles || []) {
+      const k = this.stripMdExt((raw || "").trim()).toLowerCase();
+      if (k) keys.add(k);
+    }
+    return keys;
+  }
+
+  /**
+   * True si `file` coincide con alguna entrada de la lista manual de ajustes. Casa por basename y
+   * por ruta sin extension (ambos en minusculas), igual que el resto del plugin.
+   */
+  private matchesManual(file: TFile, keys: Set<string>): boolean {
+    if (keys.size === 0) return false;
+    return (
+      keys.has(file.basename.toLowerCase()) ||
+      keys.has(this.stripMdExt(file.path).toLowerCase())
+    );
+  }
+
   /** Reconstruye desde cero el conjunto de rutas privadas (y los nombres derivados). */
   rebuildPrivateSet() {
     const next = new Set<string>();
     const names = new Set<string>();
     const pathsNoExt = new Set<string>();
+    const manual = this.manualPrivateKeys();
     for (const file of this.app.vault.getMarkdownFiles()) {
-      if (this.isPrivate(file)) {
+      if (this.isPrivate(file) || this.matchesManual(file, manual)) {
         next.add(file.path);
         names.add(file.basename.toLowerCase());
         pathsNoExt.add(this.stripMdExt(file.path).toLowerCase());
@@ -900,7 +985,19 @@ export default class PrivateSafeModePlugin extends Plugin {
     }
   }
 
+  /**
+   * Refleja el estado (bloqueado/desbloqueado) en una clase del <body>, para que el CSS pueda
+   * teñir elementos de OTROS plugins (p. ej. el modal de Omnisearch) sin tocar su codigo. Asi las
+   * actualizaciones de esos plugins no se rompen: si cambian sus clases, el tinte simplemente deja
+   * de aplicarse. Reglas en styles.css.
+   */
+  private updateBodyState() {
+    document.body.classList.toggle("psm-unlocked", this.unlocked);
+    document.body.classList.toggle("psm-locked", !this.unlocked);
+  }
+
   private updateStatus() {
+    this.updateBodyState();
     if (!this.statusEl) return;
     const n = this.privatePaths.size;
     this.statusEl.setText(this.unlocked ? `🔓 privadas (${n})` : `🔒 privadas (${n})`);
@@ -1110,6 +1207,56 @@ class PSMSettingTab extends PluginSettingTab {
       text: `Notas privadas detectadas: ${this.plugin.countPrivate()}`,
     });
 
+    // Atajo de teclado para alternar el modo seguro (capturable aqui mismo).
+    let capturing = false;
+    const hotkeySetting = new Setting(containerEl)
+      .setName("Atajo de teclado")
+      .setDesc(
+        "Combinacion que activa/desactiva el modo seguro. Pulsa 'Cambiar' y luego " +
+          "la combinacion deseada (Escape para cancelar). Por defecto: Ctrl + Alt + Z."
+      );
+    const updateHotkeyBtn = (btn: any) =>
+      btn.setButtonText(capturing ? "Pulsa la combinacion…" : formatHotkey(this.plugin.settings.hotkey));
+    hotkeySetting.addButton((btn) => {
+      updateHotkeyBtn(btn);
+      btn.onClick(() => {
+        if (capturing) return;
+        capturing = true;
+        updateHotkeyBtn(btn);
+        const onKey = (e: KeyboardEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Ignorar pulsaciones de solo-modificador (esperamos la tecla final).
+          if (["Control", "Alt", "Shift", "Meta", "OS"].includes(e.key)) return;
+          if (e.key !== "Escape") {
+            const mods: string[] = [];
+            if (e.ctrlKey) mods.push("Ctrl");
+            if (e.altKey) mods.push("Alt");
+            if (e.shiftKey) mods.push("Shift");
+            if (e.metaKey) mods.push("Meta");
+            this.plugin.settings.hotkey = { modifiers: mods, key: e.key.toLowerCase() };
+            void this.plugin.saveSettings();
+            this.plugin.registerHotkey();
+          }
+          capturing = false;
+          document.removeEventListener("keydown", onKey, true);
+          updateHotkeyBtn(btn);
+        };
+        document.addEventListener("keydown", onKey, true);
+      });
+    });
+    hotkeySetting.addExtraButton((btn) =>
+      btn
+        .setIcon("rotate-ccw")
+        .setTooltip("Restablecer a Ctrl + Alt + Z")
+        .onClick(() => {
+          this.plugin.settings.hotkey = { modifiers: ["Ctrl", "Alt"], key: "z" };
+          void this.plugin.saveSettings();
+          this.plugin.registerHotkey();
+          this.display();
+        })
+    );
+
     // Campo de frontmatter usado como criterio
     let fieldDebounce: number | null = null;
     new Setting(containerEl)
@@ -1135,6 +1282,94 @@ class PSMSettingTab extends PluginSettingTab {
             }, 400);
           })
       );
+
+    // Lista manual de archivos privados (por nombre o ruta), ademas del frontmatter.
+    new Setting(containerEl)
+      .setName("Archivos privados por nombre")
+      .setHeading();
+    containerEl.createEl("p", {
+      text:
+        "Archivos que se ocultaran en modo privado aunque NO tengan el campo de frontmatter. " +
+        "Escribe el nombre del archivo (con o sin .md) o su ruta dentro del vault. Se compara sin " +
+        "distinguir mayusculas/minusculas.",
+    }).style.cssText = "opacity:0.8;font-size:0.85em;";
+
+    // Reaplica el ocultado y refresca tanto el contador como la lista visible tras un cambio.
+    const refreshAfterChange = () => {
+      this.plugin.rebuildPrivateSet();
+      this.plugin.applyHiding();
+      countEl.setText(`Notas privadas detectadas: ${this.plugin.countPrivate()}`);
+      renderFileList();
+    };
+
+    // Caja de texto + boton para anadir una entrada nueva.
+    let pendingFile = "";
+    new Setting(containerEl)
+      .setName("Anadir archivo")
+      .setDesc("Nombre o ruta del archivo a ocultar.")
+      .addText((t) => {
+        t.setPlaceholder("Mi nota privada").onChange((v) => (pendingFile = v));
+        t.inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addFile(t.inputEl);
+          }
+        });
+        // Guardamos el input para poder limpiarlo desde el boton.
+        (this as any)._psmAddInput = t.inputEl;
+      })
+      .addButton((b) =>
+        b
+          .setButtonText("Anadir")
+          .setCta()
+          .onClick(() => addFile((this as any)._psmAddInput as HTMLInputElement | undefined))
+      );
+
+    const addFile = (inputEl?: HTMLInputElement) => {
+      const value = (pendingFile || "").trim();
+      if (!value) {
+        new Notice("Escribe el nombre de un archivo.");
+        return;
+      }
+      const list = this.plugin.settings.privateFiles;
+      const exists = list.some(
+        (f) => f.trim().toLowerCase() === value.toLowerCase()
+      );
+      if (exists) {
+        new Notice("Ese archivo ya esta en la lista.");
+        return;
+      }
+      list.push(value);
+      void this.plugin.saveSettings();
+      pendingFile = "";
+      if (inputEl) inputEl.value = "";
+      refreshAfterChange();
+    };
+
+    // Contenedor de la lista; renderFileList lo vacia y lo vuelve a pintar tras cada cambio.
+    const fileListEl = containerEl.createDiv({ cls: "psm-private-files-list" });
+    const renderFileList = () => {
+      fileListEl.empty();
+      const list = this.plugin.settings.privateFiles;
+      if (list.length === 0) {
+        fileListEl.createEl("p", { text: "No hay archivos en la lista." }).style.cssText =
+          "opacity:0.6;font-size:0.85em;";
+        return;
+      }
+      list.forEach((name, i) => {
+        new Setting(fileListEl).setName(name).addExtraButton((btn) =>
+          btn
+            .setIcon("trash")
+            .setTooltip("Quitar de la lista")
+            .onClick(() => {
+              this.plugin.settings.privateFiles.splice(i, 1);
+              void this.plugin.saveSettings();
+              refreshAfterChange();
+            })
+        );
+      });
+    };
+    renderFileList();
 
     // Contrasena
     let pwd1 = "";
