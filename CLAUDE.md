@@ -31,6 +31,11 @@ que es solo visual).
 - `main.ts` — **todo el código del plugin** (clase `PrivateSafeModePlugin`, `PasswordModal`,
   `PSMSettingTab`, y la extensión de editor `CensorEditorWidget` + `buildCensorEditorExtension`). Es el
   único fuente; no hay carpeta `src/`.
+  - `PasswordModal` recibe `onSubmit` y un `verify(password): Promise<boolean>` opcional. Con `verify`,
+    en cada evento `input` comprueba la contraseña y, si es correcta, **se desbloquea solo** (cierra +
+    `onSubmit`) sin pulsar "Desbloquear" ni Enter; si es incorrecta no hace nada. Usa un `token`
+    incremental para descartar verificaciones asíncronas obsoletas y un flag `done` para no enviar dos
+    veces. `promptUnlock()` le pasa `verifyPassword` como `verify`.
 - `main.js` — **generado** por el build; no editar a mano.
 - `manifest.json` — metadatos del plugin para Obsidian (`id`, `version`, `minAppVersion`).
 - `styles.css` — CSS estático (estado de barra, `.psm-link-hidden`, y `.psm-censored-cm` del widget de

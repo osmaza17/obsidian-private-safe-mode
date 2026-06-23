@@ -880,14 +880,18 @@ export default class PrivateSafeModePlugin extends Plugin {
       new Notice("No hay contrasena configurada. Ve a los ajustes de Private Safe Mode.");
       return;
     }
-    new PasswordModal(this.app, async (password) => {
-      const ok = await this.verifyPassword(password);
-      if (ok) {
-        this.unlock();
-      } else {
-        new Notice("Contrasena incorrecta.");
-      }
-    }).open();
+    new PasswordModal(
+      this.app,
+      async (password) => {
+        const ok = await this.verifyPassword(password);
+        if (ok) {
+          this.unlock();
+        } else {
+          new Notice("Contrasena incorrecta.");
+        }
+      },
+      (password) => this.verifyPassword(password)
+    ).open();
   }
 
   private unlock() {
@@ -1137,31 +1141,59 @@ function buildCensorEditorExtension(plugin: PrivateSafeModePlugin) {
 
 class PasswordModal extends Modal {
   private onSubmit: (password: string) => void;
+  // Verificador opcional para el desbloqueo automatico: en cuanto la contrasena
+  // tecleada es correcta, el modal se cierra y desbloquea sin pulsar nada.
+  private verify?: (password: string) => Promise<boolean>;
+  private done = false;
 
-  constructor(app: App, onSubmit: (password: string) => void) {
+  constructor(
+    app: App,
+    onSubmit: (password: string) => void,
+    verify?: (password: string) => Promise<boolean>
+  ) {
     super(app);
     this.onSubmit = onSubmit;
+    this.verify = verify;
   }
 
   onOpen() {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: "Modo seguro" });
-    contentEl.createEl("p", { text: "Introduce la contrasena para mostrar las notas privadas." });
+    contentEl.createEl("p", {
+      text: "Introduce la contrasena: se desbloquea automaticamente al ser correcta.",
+    });
 
     const input = contentEl.createEl("input", { type: "password" });
     input.style.width = "100%";
     input.focus();
 
-    const submit = () => {
-      const value = input.value;
+    const submit = (value: string) => {
+      if (this.done) return;
+      this.done = true;
       this.close();
       this.onSubmit(value);
     };
 
+    // Desbloqueo automatico: en cada pulsacion comprueba si ya es correcta.
+    // Se usa un token para ignorar verificaciones obsoletas (las comprobaciones
+    // son asincronas por el hash). Solo cierra al acertar; si es incorrecta, no
+    // hace nada y deja seguir escribiendo.
+    let token = 0;
+    if (this.verify) {
+      input.addEventListener("input", () => {
+        const value = input.value;
+        if (!value) return;
+        const myToken = ++token;
+        this.verify!(value).then((ok) => {
+          if (ok && myToken === token) submit(value);
+        });
+      });
+    }
+
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        submit();
+        submit(input.value);
       }
     });
 
@@ -1170,7 +1202,7 @@ class PasswordModal extends Modal {
     buttons.style.textAlign = "right";
     const ok = buttons.createEl("button", { text: "Desbloquear" });
     ok.addClass("mod-cta");
-    ok.addEventListener("click", submit);
+    ok.addEventListener("click", () => submit(input.value));
   }
 
   onClose() {

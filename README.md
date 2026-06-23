@@ -64,7 +64,10 @@ Verificable con `grep` de esas APIs antes de cada release (ver `CLAUDE.md` > Con
    nota privada estaba **abierta en una pestana**, se cierra al bloquear (ver el apartado siguiente
    sobre el alcance de esto).
 5. Pulsa el atajo (o el candado de la barra de estado) e introduce la contrasena para mostrarlas.
-   Vuelve a pulsar para ocultarlas (bloquear no pide contrasena).
+   El desbloqueo es **automatico**: en cuanto la contrasena tecleada es correcta el modal se cierra
+   y las notas privadas reaparecen, sin pulsar "Desbloquear" ni Enter (que siguen disponibles).
+   Mientras sea incorrecta no pasa nada y puedes seguir escribiendo. Vuelve a pulsar el atajo para
+   ocultarlas (bloquear no pide contrasena).
 
 ## Bases nativas
 
